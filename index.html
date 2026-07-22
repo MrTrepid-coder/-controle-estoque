@@ -645,6 +645,18 @@
                         <label>Fornecedor</label>
                         <input type="text" id="prodSupplier" placeholder="Ex: Distribuidora ABC" autocomplete="off">
                     </div>
+                    <div class="form-group">
+                        <label>Tipo</label>
+                        <select id="prodPackagingType" onchange="toggleUnitsPerPackage()">
+                            <option value="unidade">Unidade</option>
+                            <option value="fardo">Fardo</option>
+                            <option value="caixa">Caixa</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="unitsPerPackageGroup" style="display:none;">
+                        <label>Unidades por embalagem</label>
+                        <input type="number" id="prodUnitsPerPackage" min="1" value="1">
+                    </div>
                     <div class="form-group" style="grid-column:1/-1;">
                         <label>Foto do Produto</label>
                         <div class="photo-upload" id="prodPhotoUpload" onclick="document.getElementById('prodPhotoInput').click()">
@@ -676,7 +688,7 @@
                                 <label>Lote</label>
                                 <input type="text" class="batch-code" placeholder="Ex: Lote 001">
                             </div>
-                            <div></div>
+                            <button class="batch-remove" onclick="this.parentElement.remove()">&times;</button>
                         </div>
                     </div>
                 </div>
@@ -780,6 +792,18 @@
                         <label>Fornecedor</label>
                         <input type="text" id="editSupplier">
                     </div>
+                    <div class="form-group">
+                        <label>Tipo</label>
+                        <select id="editPackagingType" onchange="toggleUnitsPerPackage(this)">
+                            <option value="unidade">Unidade</option>
+                            <option value="fardo">Fardo</option>
+                            <option value="caixa">Caixa</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="editUnitsPerPackageGroup" style="display:none;">
+                        <label>Unidades por embalagem</label>
+                        <input type="number" id="editUnitsPerPackage" min="1" value="1">
+                    </div>
                     <div class="form-group" style="grid-column:1/-1;">
                         <label>Foto do Produto</label>
                         <div class="photo-upload" id="editPhotoUpload" onclick="document.getElementById('editPhotoInput').click()">
@@ -849,7 +873,7 @@
         let sortDir = 1;
         let sharedIds = new Set();
 
-        // Migrate old flat data to new batches structure
+        // Migrate old flat data to new batches structure and add packaging defaults
         products = products.map(p => {
             if (!p.batches) {
                 p.batches = [{
@@ -859,8 +883,19 @@
                     batch: p.batch || '-'
                 }];
             }
+            if (!p.packagingType) p.packagingType = 'unidade';
+            if (!p.unitsPerPackage) p.unitsPerPackage = 1;
             return p;
         });
+
+        function getTotalUnits(product, quantity) {
+            return quantity * (product.unitsPerPackage || 1);
+        }
+
+        function getPackagingLabel(product) {
+            const map = { unidade: 'un', fardo: 'fardo', caixa: 'caixa' };
+            return map[product.packagingType] || 'un';
+        }
 
         function getAllBatches() {
             const result = [];
@@ -930,6 +965,18 @@
 
         function getQuantityClass(qty) {
             return qty <= 0 ? 'qty-low' : 'qty-ok';
+        }
+
+        function toggleUnitsPerPackage(selectEl) {
+            const el = selectEl || document.getElementById('prodPackagingType');
+            const group = document.getElementById(el.id === 'editPackagingType' ? 'editUnitsPerPackageGroup' : 'unitsPerPackageGroup');
+            const input = document.getElementById(el.id === 'editPackagingType' ? 'editUnitsPerPackage' : 'prodUnitsPerPackage');
+            if (el.value === 'fardo' || el.value === 'caixa') {
+                group.style.display = 'block';
+            } else {
+                group.style.display = 'none';
+                input.value = 1;
+            }
         }
 
         function previewAddPhoto(e) {
@@ -1010,6 +1057,8 @@
             const name = document.getElementById('prodName').value.trim();
             const category = document.getElementById('prodCategory').value;
             const supplier = document.getElementById('prodSupplier').value.trim();
+            const packagingType = document.getElementById('prodPackagingType').value;
+            const unitsPerPackage = parseInt(document.getElementById('prodUnitsPerPackage').value) || 1;
             const photoImg = document.querySelector('#prodPhotoUpload img');
             const photo = photoImg ? photoImg.src : null;
 
@@ -1047,6 +1096,8 @@
                 category,
                 supplier: supplier || '-',
                 photo: photo,
+                packagingType,
+                unitsPerPackage,
                 createdAt: new Date().toISOString(),
                 batches
             });
@@ -1056,6 +1107,9 @@
 
             document.getElementById('prodName').value = '';
             document.getElementById('prodSupplier').value = '';
+            document.getElementById('prodPackagingType').value = 'unidade';
+            document.getElementById('unitsPerPackageGroup').style.display = 'none';
+            document.getElementById('prodUnitsPerPackage').value = 1;
             document.getElementById('prodPhotoUpload').innerHTML = `<input type="file" id="prodPhotoInput" accept="image/*" onchange="previewAddPhoto(event)">
                 <div class="placeholder">
                     <span class="icon">📷</span>
@@ -1076,7 +1130,7 @@
                         <label>Lote</label>
                         <input type="text" class="batch-code" placeholder="Ex: Lote 001">
                     </div>
-                    <div></div>
+                    <button class="batch-remove" onclick="this.parentElement.remove()">&times;</button>
                 </div>`;
 
             showToast(`"${name}" adicionado com sucesso!`);
@@ -1101,6 +1155,15 @@
             document.getElementById('editName').value = p.name;
             document.getElementById('editCategory').value = p.category;
             document.getElementById('editSupplier').value = p.supplier === '-' ? '' : p.supplier;
+            document.getElementById('editPackagingType').value = p.packagingType || 'unidade';
+            const eUnits = document.getElementById('editUnitsPerPackage');
+            eUnits.value = p.unitsPerPackage || 1;
+            const eGroup = document.getElementById('editUnitsPerPackageGroup');
+            if (p.packagingType === 'fardo' || p.packagingType === 'caixa') {
+                eGroup.style.display = 'block';
+            } else {
+                eGroup.style.display = 'none';
+            }
 
             const editUpload = document.getElementById('editPhotoUpload');
             if (p.photo) {
@@ -1161,6 +1224,8 @@
             p.name = name;
             p.category = document.getElementById('editCategory').value;
             p.supplier = document.getElementById('editSupplier').value.trim() || '-';
+            p.packagingType = document.getElementById('editPackagingType').value;
+            p.unitsPerPackage = parseInt(document.getElementById('editUnitsPerPackage').value) || 1;
             const editPhotoImg = document.querySelector('#editPhotoUpload img');
             p.photo = editPhotoImg ? editPhotoImg.src : null;
             p.batches = batches;
@@ -1215,7 +1280,10 @@
 
             const expired = allBatches.filter(({ batch }) => getStatus(batch.expiryDate) === 'expired');
             const expiringToday = allBatches.filter(({ batch }) => getStatus(batch.expiryDate) === 'expiring');
-            const lowStock = allBatches.filter(({ batch }) => batch.quantity > 0 && batch.quantity <= 3);
+            const lowStock = allBatches.filter(({ product, batch }) => {
+                const totalUnits = getTotalUnits(product, batch.quantity);
+                return totalUnits > 0 && totalUnits <= 3;
+            });
 
             const banner = document.getElementById('alertBanner');
             let alerts = [];
@@ -1296,12 +1364,17 @@
                     ? `<img src="${p.photo}" alt="${p.name}">`
                     : `<div class="no-photo">📦</div>`;
                 const totalQty = (p.batches || []).reduce((s, batch) => s + batch.quantity, 0);
+                const packLabel = getPackagingLabel(p);
+                const totalUnits = getTotalUnits(p, b.quantity);
+                const qtyDisplay = p.packagingType === 'unidade'
+                    ? totalUnits
+                    : `${b.quantity} ${packLabel}${b.quantity !== 1 ? 's' : ''} (${totalUnits} un)`;
                 return `<tr>
                     <td class="td-photo">${photoHtml}</td>
-                    <td class="td-product-info"><strong>${p.name}</strong><div class="sub">${p.supplier !== '-' ? p.supplier : ''} ${p.batches.length > 1 ? '· ' + p.batches.length + ' lotes' : ''}</div></td>
+                    <td class="td-product-info"><strong>${p.name}</strong><div class="sub">${p.supplier !== '-' ? p.supplier : ''} ${p.batches.length > 1 ? '· ' + p.batches.length + ' lotes' : ''} · ${p.packagingType === 'unidade' ? 'Unidade' : p.packagingType === 'fardo' ? 'Fardo' : 'Caixa'}${p.unitsPerPackage > 1 ? ' (' + p.unitsPerPackage + ' un)' : ''}</div></td>
                     <td><span class="badge badge-success" style="background:var(--gray-100);color:var(--gray-700);text-transform:none;">${p.category}</span></td>
                     <td style="${status === 'expired' || status === 'expiring' ? 'font-weight:700;' : ''}">${formattedDate}</td>
-                    <td class="${getQuantityClass(b.quantity)}">${b.quantity}</td>
+                    <td class="${getQuantityClass(totalUnits)}">${qtyDisplay}</td>
                     <td style="color:var(--gray-500);font-size:.85rem;">${b.batch}</td>
                     <td>${getStatusLabel(status)}</td>
                     <td>
@@ -1333,16 +1406,21 @@
 
             function renderSection(title, icon, items, isExpired = false) {
                 if (items.length === 0) return '';
-                const totalQty = items.reduce((s, { batch }) => s + batch.quantity, 0);
+                const totalQty = items.reduce((s, { product, batch }) => s + getTotalUnits(product, batch.quantity), 0);
                 return `<div class="report-section">
                     <h3>${icon} ${title} <span>${items.length} lotes</span></h3>
                     ${items.map(({ product, batch }) => {
                         const d = new Date(batch.expiryDate + 'T00:00:00');
                         const fd = d.toLocaleDateString('pt-BR');
+                        const tu = getTotalUnits(product, batch.quantity);
+                        const pl = getPackagingLabel(product);
+                        const qtyStr = product.packagingType === 'unidade'
+                            ? `${tu} un`
+                            : `${batch.quantity} ${pl}${batch.quantity !== 1 ? 's' : ''} (${tu} un)`;
                         return `<div class="report-item${isExpired ? ' expired' : ''}">
                             <span class="r-name">${product.name} ${batch.batch !== '-' ? '(' + batch.batch + ')' : ''}</span>
                             <span class="r-date">${fd}</span>
-                            <span class="r-qty">${batch.quantity} un</span>
+                            <span class="r-qty">${qtyStr}</span>
                         </div>`;
                     }).join('')}
                     <div style="text-align:right;padding:.4rem .75rem;font-size:.8rem;color:var(--gray-500);font-weight:600;">
@@ -1361,10 +1439,15 @@
                     const fd = d.toLocaleDateString('pt-BR');
                     const status = getStatus(batch.expiryDate);
                     const statusClass = status === 'expired' ? 'expired' : '';
+                    const tu = getTotalUnits(product, batch.quantity);
+                    const pl = getPackagingLabel(product);
+                    const qtyStr = product.packagingType === 'unidade'
+                        ? `${tu} un`
+                        : `${batch.quantity} ${pl}${batch.quantity !== 1 ? 's' : ''} (${tu} un)`;
                     return `<div class="report-item ${statusClass}">
                         <span class="r-name">${product.name} ${batch.batch !== '-' ? '(' + batch.batch + ')' : ''}</span>
                         <span class="r-date">${fd}</span>
-                        <span class="r-qty">${batch.quantity} un</span>
+                        <span class="r-qty">${qtyStr}</span>
                     </div>`;
                 }).join('')}
                 <div style="text-align:right;padding:.4rem .75rem;font-size:.8rem;color:var(--gray-500);font-weight:600;">
@@ -1405,18 +1488,23 @@
 
             function makeTable(items, showStatus = false) {
                 if (items.length === 0) return '<p style="font-style:italic;">Nenhum lote nesta seção.</p>';
-                const total = items.reduce((s, { batch }) => s + batch.quantity, 0);
+                const total = items.reduce((s, { product, batch }) => s + getTotalUnits(product, batch.quantity), 0);
                 let t = '<table><thead><tr><th>Produto</th><th>Categoria</th><th>Validade</th><th>Qtd</th><th>Lote</th>';
                 if (showStatus) t += '<th>Status</th>';
                 t += '</tr></thead><tbody>';
                 items.forEach(({ product, batch }) => {
                     const d = new Date(batch.expiryDate + 'T00:00:00');
                     const fd = d.toLocaleDateString('pt-BR');
+                    const tu = getTotalUnits(product, batch.quantity);
+                    const pl = getPackagingLabel(product);
+                    const qtyStr = product.packagingType === 'unidade'
+                        ? `${tu}`
+                        : `${batch.quantity} ${pl}${batch.quantity !== 1 ? 's' : ''} (${tu} un)`;
                     t += `<tr class="${statusClass(batch)}">
                         <td>${product.name}</td>
                         <td>${product.category}</td>
                         <td>${fd}</td>
-                        <td style="text-align:center;">${batch.quantity}</td>
+                        <td style="text-align:center;">${qtyStr}</td>
                         <td>${batch.batch}</td>`;
                     if (showStatus) t += `<td>${statusText(batch)}</td>`;
                     t += '</tr>';
@@ -1435,7 +1523,7 @@
             html += makeTable(proximos);
             html += `<h2>📋 Todos os lotes ordenados por data (${allBatches.length} lotes)</h2>`;
             html += makeTable(allBatches, true);
-            html += `<div class="print-total" style="font-size:11pt;">Total geral: ${allBatches.reduce((s, { batch }) => s + batch.quantity, 0)} unidades</div>`;
+            html += `<div class="print-total" style="font-size:11pt;">Total geral: ${allBatches.reduce((s, { product, batch }) => s + getTotalUnits(product, batch.quantity), 0)} unidades</div>`;
             html += `<div class="print-footer">Controle de Estoque — ${hoje.toLocaleDateString('pt-BR')}</div>`;
             html += '</div>';
 
@@ -1482,23 +1570,36 @@
             csv += 'RELATÓRIO DE ESTOQUE\n\n';
 
             csv += 'VENCIDOS NOS ÚLTIMOS 5 DIAS\n';
-            csv += 'Produto;Data Validade;Quantidade;Categoria;Lote;Fornecedor\n';
-            vencidos5.forEach(({ product, batch }) => csv += `${product.name};${batch.expiryDate};${batch.quantity};${product.category};${batch.batch};${product.supplier}\n`);
-            csv += `Total unidades: ${vencidos5.reduce((s, { batch }) => s + batch.quantity, 0)}\n\n`;
+            csv += 'Produto;Data Validade;Qtd;Und por embalagem;Tipo;Categoria;Lote;Fornecedor;Total Und\n';
+            let totalVencidos = 0;
+            vencidos5.forEach(({ product, batch }) => {
+                const tu = getTotalUnits(product, batch.quantity);
+                totalVencidos += tu;
+                csv += `${product.name};${batch.expiryDate};${batch.quantity};${product.unitsPerPackage};${product.packagingType};${product.category};${batch.batch};${product.supplier};${tu}\n`;
+            });
+            csv += `Total unidades: ${totalVencidos}\n\n`;
 
             csv += 'PRÓXIMOS A VENCER (7 DIAS)\n';
-            csv += 'Produto;Data Validade;Quantidade;Categoria;Lote;Fornecedor\n';
-            proximos.forEach(({ product, batch }) => csv += `${product.name};${batch.expiryDate};${batch.quantity};${product.category};${batch.batch};${product.supplier}\n`);
-            csv += `Total unidades: ${proximos.reduce((s, { batch }) => s + batch.quantity, 0)}\n\n`;
+            csv += 'Produto;Data Validade;Qtd;Und por embalagem;Tipo;Categoria;Lote;Fornecedor;Total Und\n';
+            let totalProximos = 0;
+            proximos.forEach(({ product, batch }) => {
+                const tu = getTotalUnits(product, batch.quantity);
+                totalProximos += tu;
+                csv += `${product.name};${batch.expiryDate};${batch.quantity};${product.unitsPerPackage};${product.packagingType};${product.category};${batch.batch};${product.supplier};${tu}\n`;
+            });
+            csv += `Total unidades: ${totalProximos}\n\n`;
 
             csv += 'TODOS OS PRODUTOS (ORDENADOS POR DATA)\n';
-            csv += 'Produto;Data Validade;Quantidade;Categoria;Lote;Fornecedor;Status\n';
+            csv += 'Produto;Data Validade;Qtd;Und por embalagem;Tipo;Categoria;Lote;Fornecedor;Status;Total Und\n';
+            let totalGeral = 0;
             allBatches.forEach(({ product, batch }) => {
                 const s = getStatus(batch.expiryDate);
                 const st = s === 'expired' ? 'Vencido' : s === 'expiring' ? 'Vence hoje' : s === 'expiring_soon' ? 'Vence em breve' : 'OK';
-                csv += `${product.name};${batch.expiryDate};${batch.quantity};${product.category};${batch.batch};${product.supplier};${st}\n`;
+                const tu = getTotalUnits(product, batch.quantity);
+                totalGeral += tu;
+                csv += `${product.name};${batch.expiryDate};${batch.quantity};${product.unitsPerPackage};${product.packagingType};${product.category};${batch.batch};${product.supplier};${st};${tu}\n`;
             });
-            csv += `\nTotal geral de unidades: ${allBatches.reduce((s, { batch }) => s + batch.quantity, 0)}\n`;
+            csv += `\nTotal geral de unidades: ${totalGeral}\n`;
 
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
@@ -1536,11 +1637,16 @@
                 const actionHtml = shared
                     ? `<span style="font-size:1.5rem;color:var(--success);" title="Compartilhado">✅</span>`
                     : `<button class="share-btn" onclick="compartilharBatch(${product.id}, ${batch.id})" title="Compartilhar">👆</button>`;
+                const tu = getTotalUnits(product, batch.quantity);
+                const pl = getPackagingLabel(product);
+                const qtyStr = product.packagingType === 'unidade'
+                    ? `${tu} un`
+                    : `${batch.quantity} ${pl}${batch.quantity !== 1 ? 's' : ''} (${tu} un)`;
                 return `<div class="share-item" style="${shared ? 'background:#f0fdf4;border-color:#86efac;' : ''}">
                     ${photoHtml}
                     <div class="share-info">
                         <div class="name">${product.name} ${batch.batch !== '-' ? '(' + batch.batch + ')' : ''}</div>
-                        <div class="detail">Validade: <strong>${fd}</strong> &middot; Qtd: <strong>${batch.quantity} un</strong></div>
+                        <div class="detail">Validade: <strong>${fd}</strong> &middot; Qtd: <strong>${qtyStr}</strong></div>
                     </div>
                     ${actionHtml}
                 </div>`;
@@ -1556,7 +1662,12 @@
             if (!batch) return;
             const d = new Date(batch.expiryDate + 'T00:00:00');
             const fd = d.toLocaleDateString('pt-BR');
-            const msg = `📦 *${p.name}*${batch.batch !== '-' ? ' (' + batch.batch + ')' : ''}\n📅 Validade: ${fd}\n🔢 Quantidade: ${batch.quantity} un`;
+            const tu = getTotalUnits(p, batch.quantity);
+            const pl = getPackagingLabel(p);
+            const qtyStr = p.packagingType === 'unidade'
+                ? `${tu} un`
+                : `${batch.quantity} ${pl}${batch.quantity !== 1 ? 's' : ''} (${tu} un)`;
+            const msg = `📦 *${p.name}*${batch.batch !== '-' ? ' (' + batch.batch + ')' : ''}\n📅 Validade: ${fd}\n🔢 Quantidade: ${qtyStr}`;
 
             const onDone = () => {
                 sharedIds.add(productId + '-' + batchId);
